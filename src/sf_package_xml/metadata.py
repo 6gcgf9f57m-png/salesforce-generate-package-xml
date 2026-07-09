@@ -7,8 +7,10 @@ import logging
 import subprocess
 import sys
 import time
+import urllib.error
 import urllib.request
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Callable, Optional
 
 from sf_package_xml.filters import filter_namespaced
@@ -38,27 +40,70 @@ _STD_VALUE_SET_URL = (
     "/main/src/registry/stdValueSetRegistry.json"
 )
 
+# raw.githubusercontent.com は匿名アクセスだと IP 単位でレート制限 (429) されることがある
+# (CI ランナーは IP を共有するため特に発生しやすい)。
+# フォールバック用にリポジトリへ同梱した JSON (data/stdValueSetRegistry.json) を持たせておき、
+# 取得失敗時はそちらを使うことで完全な失敗を防ぐ。
+# ※ 同梱ファイルは新しい StandardValueSet が追加されたら手動で更新すること
+#   (GitHub 上の最新版を取得して src/sf_package_xml/data/stdValueSetRegistry.json を置き換える)。
+_STD_VALUE_SET_FALLBACK_PATH = Path(__file__).parent / "data" / "stdValueSetRegistry.json"
 
-def fetch_standard_value_set_members() -> list[str]:
+
+def fetch_standard_value_set_members(max_retries: int = 3) -> list[str]:
     """
     stdValueSetRegistry.json を GitHub から取得し、fullnames リストを返す。
 
-    取得失敗 (ネットワークエラー / JSON 不正 / fullnames が空) の場合は
-    エラーメッセージを出力してスクリプトを終了する。
+    429 (Too Many Requests) 等の一時的なエラーは exponential backoff でリトライする
+    (最大 max_retries 回)。全リトライ失敗時はリポジトリに同梱したフォールバック JSON
+    (src/sf_package_xml/data/stdValueSetRegistry.json) を使う。
+    フォールバックも読み込めない場合はエラーメッセージを出力してスクリプトを終了する。
     """
     logger.info("stdValueSetRegistry.json を取得中 ...")
-    try:
-        with urllib.request.urlopen(_STD_VALUE_SET_URL, timeout=10) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
-        members = data.get("fullnames", [])
-        if not members:
-            raise ValueError("fullnames キーが空")
-        logger.info("StandardValueSet: %d 件取得", len(members))
-        return members
-    except Exception as e:
-        logger.error("stdValueSetRegistry.json の取得に失敗しました: %s", e)
-        logger.error("取得先: %s", _STD_VALUE_SET_URL)
-        sys.exit(1)
+
+    last_error: Exception | None = None
+    for attempt in range(max_retries):
+        try:
+            with urllib.request.urlopen(_STD_VALUE_SET_URL, timeout=10) as resp:
+                raw = resp.read().decode("utf-8")
+            data = json.loads(raw)
+            members = data.get("fullnames", [])
+            if not members:
+                raise ValueError("fullnames キーが空")
+            logger.info("StandardValueSet: %d 件取得", len(members))
+            return members
+        except urllib.error.HTTPError as e:
+            last_error = e
+            if e.code == 429 and attempt < max_retries - 1:
+                wait = 2 ** (attempt + 1)  # 2s → 4s → 8s
+                logger.warning(
+                    "429 Too Many Requests, %ds 後にリトライ (%d/%d)",
+                    wait, attempt + 1, max_retries,
+                )
+                time.sleep(wait)
+                continue
+            break
+        except Exception as e:
+            last_error = e
+            break
+
+    logger.error("stdValueSetRegistry.json の取得に失敗しました: %s", last_error)
+    logger.error("取得先: %s", _STD_VALUE_SET_URL)
+
+    if _STD_VALUE_SET_FALLBACK_PATH.exists():
+        logger.warning(
+            "同梱フォールバック (%s) を使用します。StandardValueSet が最新でない可能性があります。",
+            _STD_VALUE_SET_FALLBACK_PATH,
+        )
+        try:
+            data = json.loads(_STD_VALUE_SET_FALLBACK_PATH.read_text(encoding="utf-8"))
+            members = data.get("fullnames", [])
+            if members:
+                logger.info("StandardValueSet: %d 件取得 (同梱フォールバック)", len(members))
+                return members
+        except (OSError, json.JSONDecodeError, ValueError) as e:
+            logger.error("フォールバックの読み込みに失敗しました: %s", e)
+
+    sys.exit(1)
 
 
 # ---------------------------------------------------------------------------

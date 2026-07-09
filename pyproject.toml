@@ -27,6 +27,9 @@ sf-package-xml = "sf_package_xml.cli:main"
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.package-data]
+sf_package_xml = ["data/*.json"]
+
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0",
