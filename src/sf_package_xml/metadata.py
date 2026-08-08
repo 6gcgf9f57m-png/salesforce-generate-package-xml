@@ -178,9 +178,22 @@ def run_sf(
             time.sleep(wait)
             continue
 
-        # status != 0 でも result が返る場合 (警告付き成功) があるため警告のみに留める
+        # status != 0 かつ result も欠落している場合、警告付き成功 (result はあるが
+        # status != 0) とは異なり、呼び出しが実質的に失敗している可能性が高い。
+        # 高並列実行時にごく稀にこの形の欠損レスポンスが返るメタデータタイプがあり、
+        # 従来はここで data をそのまま返していたため呼び出し元 (list_metadata) が
+        # "result = data.get('result') or []" で空リストと解釈し、本来のエラーが
+        # "メンバー0件" として静かに握り潰されていた (--verbose 無しでは検知不能)。
+        # スロットルエラーと同様にリトライし、最終的に失敗のままなら None を返して
+        # 呼び出し元にエラーとして伝播させる。
         if data.get("status") not in (0, None) and "result" not in data:
-            logger.warning("%s", msg or "Unknown error")
+            wait = 2 ** (attempt + 1)  # 2s → 4s → 8s
+            logger.warning(
+                "result 欠損レスポンス (%s), %ds 後にリトライ (%d/%d): %s",
+                (msg or "Unknown error")[:60], wait, attempt + 1, max_retries, " ".join(args[:3]),
+            )
+            time.sleep(wait)
+            continue
 
         return data
 
