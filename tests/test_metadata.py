@@ -7,7 +7,7 @@ SF CLI への呼び出しは unittest.mock でモックし、外部依存なし�
 import json
 from unittest.mock import MagicMock, patch
 
-from sf_package_xml.metadata import get_org_api_version, run_sf
+from sf_package_xml.metadata import get_metadata_types, get_org_api_version, run_sf
 
 
 def _sf_run(stdout_obj):
@@ -108,3 +108,48 @@ class TestGetOrgApiVersion:
         response = {"status": 0, "result": None}
         with patch("sf_package_xml.metadata.run_sf", return_value=response):
             assert get_org_api_version(None) is None
+
+
+class TestGetMetadataTypes:
+    def test_returns_types_when_all_calls_agree(self):
+        objects = [{"xmlName": "ApexClass"}, {"xmlName": "CustomObject"}]
+        response = {"status": 0, "result": {"metadataObjects": objects}}
+        with patch("sf_package_xml.metadata.run_sf", return_value=response):
+            result = get_metadata_types(None)
+        assert {t["xmlName"] for t in result} == {"ApexClass", "CustomObject"}
+
+    def test_merges_union_when_counts_disagree_between_calls(self):
+        # 1回目は WaveDashboard が欠落した不完全なリスト、2回目は完全なリスト。
+        # 実際の org で "sf org list metadata-types" の件数が呼び出しごとに
+        # 揺れる (235件 / 246件) ことが確認されたため、和集合を取る。
+        incomplete = {"status": 0, "result": {"metadataObjects": [{"xmlName": "ApexClass"}]}}
+        complete = {
+            "status": 0,
+            "result": {"metadataObjects": [{"xmlName": "ApexClass"}, {"xmlName": "WaveDashboard"}]},
+        }
+        with patch("sf_package_xml.metadata.run_sf", side_effect=[incomplete, complete]):
+            result = get_metadata_types(None)
+        assert {t["xmlName"] for t in result} == {"ApexClass", "WaveDashboard"}
+
+    def test_recovers_when_first_call_fails_entirely(self):
+        complete = {"status": 0, "result": {"metadataObjects": [{"xmlName": "ApexClass"}]}}
+        with patch("sf_package_xml.metadata.run_sf", side_effect=[None, complete]):
+            result = get_metadata_types(None)
+        assert {t["xmlName"] for t in result} == {"ApexClass"}
+
+    def test_returns_empty_list_when_all_attempts_fail(self):
+        with patch("sf_package_xml.metadata.run_sf", return_value=None):
+            assert get_metadata_types(None) == []
+
+    def test_calls_run_sf_attempts_times(self):
+        response = {"status": 0, "result": {"metadataObjects": [{"xmlName": "ApexClass"}]}}
+        with patch("sf_package_xml.metadata.run_sf", return_value=response) as mock_run_sf:
+            get_metadata_types(None, attempts=3)
+        assert mock_run_sf.call_count == 3
+
+    def test_single_attempt_when_attempts_is_one(self):
+        response = {"status": 0, "result": {"metadataObjects": [{"xmlName": "ApexClass"}]}}
+        with patch("sf_package_xml.metadata.run_sf", return_value=response) as mock_run_sf:
+            result = get_metadata_types(None, attempts=1)
+        assert mock_run_sf.call_count == 1
+        assert {t["xmlName"] for t in result} == {"ApexClass"}

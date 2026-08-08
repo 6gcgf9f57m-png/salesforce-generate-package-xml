@@ -275,30 +275,60 @@ def print_api_usage(label: str, target_org: Optional[str]) -> dict[str, tuple[in
     return result
 
 
-def get_metadata_types(target_org: Optional[str]) -> list[dict]:
+def get_metadata_types(target_org: Optional[str], attempts: int = 2) -> list[dict]:
     """
     対象 org に存在するすべてのメタデータタイプ定義を返す。
 
     "sf org list metadata-types" を実行し、metadataObjects 配列を取得する。
     各要素は xmlName / inFolder / suffix 等のプロパティを持つ dict。
+
+    メタデータタイプの登録簿は org 内で短期間に変化するものではないが、
+    "sf org list metadata-types" 自体が同一 org に対してごく稀に不完全な
+    リストを返すことが確認されている (例: 235件 / 246件のように呼び出しの
+    たびに件数が揺れ、特定のタイプ (WaveDashboard 等) が欠落する)。
+    これを1回の呼び出しだけで信用すると取得漏れに気づけないため、
+    デフォルトで複数回呼び出して和集合を取る。
     """
-    logger.info("メタデータタイプ一覧を取得中 ...")
-    data = run_sf(["org", "list", "metadata-types"], target_org)
-    if data is None:
+    merged: dict[str, dict] = {}
+    counts: list[int] = []
+
+    for attempt in range(1, attempts + 1):
+        if attempts > 1:
+            logger.info("メタデータタイプ一覧を取得中 (%d/%d) ...", attempt, attempts)
+        else:
+            logger.info("メタデータタイプ一覧を取得中 ...")
+
+        data = run_sf(["org", "list", "metadata-types"], target_org)
+        if data is None:
+            continue
+
+        # SF CLI のバージョンによって result の構造が異なる場合があるため両方を試みる
+        objects = (
+            data.get("result", {}).get("metadataObjects")
+            or data.get("result", [])
+        )
+        if not isinstance(objects, list):
+            continue
+
+        counts.append(len(objects))
+        for obj in objects:
+            xml_name = obj.get("xmlName")
+            if xml_name and xml_name not in merged:
+                merged[xml_name] = obj
+
+    if not merged:
         logger.error("メタデータタイプの取得に失敗しました。")
         return []
 
-    # SF CLI のバージョンによって result の構造が異なる場合があるため両方を試みる
-    objects = (
-        data.get("result", {}).get("metadataObjects")
-        or data.get("result", [])
-    )
-    if not isinstance(objects, list):
-        logger.error("メタデータタイプの取得に失敗しました。")
-        return []
+    if len(set(counts)) > 1:
+        logger.warning(
+            "メタデータタイプ一覧の件数が呼び出しごとに一致しませんでした (%s件)。"
+            "和集合の %d 件を採用します。",
+            " / ".join(str(c) for c in counts), len(merged),
+        )
 
-    logger.info("取得済みタイプ数: %d", len(objects))
-    return objects
+    logger.info("取得済みタイプ数: %d", len(merged))
+    return list(merged.values())
 
 
 def list_metadata(
