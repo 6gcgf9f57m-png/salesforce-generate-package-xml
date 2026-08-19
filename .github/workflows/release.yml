@@ -1,59 +1,47 @@
 name: Release
 
 # ──────────────────────────────────────────────
-# トリガー: ユーザーが手動でタグを push したとき
+# トリガー: main への push
 #
-#   git tag v1.0.0
-#   git push origin v1.0.0
-#
-# 通常のリリースは bump-version.yml (手動実行) を使うこと。
-# bump-version.yml は GITHUB_TOKEN でタグを push するため
-# このワークフローはトリガーされない (GitHub Actions の仕様)。
-# このワークフローはローカルから直接タグを push した場合のみ起動する。
+# python-semantic-release が Conventional Commits を解析し、
+#   1. pyproject.toml / __init__.py のバージョンを更新
+#   2. CHANGELOG.md にリリースノートを追記
+#   3. git commit & tag を作成・push
+#   4. GitHub Release を作成
+# まで自動実行する。手動での bump-version.yml 実行は不要。
 # ──────────────────────────────────────────────
 on:
   push:
-    tags:
-      - "v*"
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   release:
-    name: Create GitHub Release
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
-
     steps:
-      - uses: actions/checkout@v6
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
 
-      - name: Extract release notes from CHANGELOG.md
-        id: changelog
-        run: |
-          VERSION="${{ github.ref_name }}"
-          VERSION_NUM="${VERSION#v}"   # v0.2.0 → 0.2.0
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
 
-          # ## [x.y.z] から次の ## [ までの行を抽出
-          NOTES=$(awk \
-            "/^## \[${VERSION_NUM}\]/{found=1; next} \
-             found && /^## \[/{exit} \
-             found{print}" \
-            CHANGELOG.md)
+      - name: Install python-semantic-release
+        run: pip install "python-semantic-release>=10.6.1"
 
-          if [ -z "$NOTES" ]; then
-            NOTES="リリースノートは [CHANGELOG.md](CHANGELOG.md) を参照してください。"
-          fi
-
-          # 複数行の出力を GITHUB_OUTPUT に渡す
-          {
-            echo "notes<<EOF"
-            echo "$NOTES"
-            echo "EOF"
-          } >> "$GITHUB_OUTPUT"
-
-      - name: Create GitHub Release
+      - name: Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release create "${{ github.ref_name }}" \
-            --title "Release ${{ github.ref_name }}" \
-            --notes "${{ steps.changelog.outputs.notes }}"
+          semantic-release version --push
+          semantic-release publish

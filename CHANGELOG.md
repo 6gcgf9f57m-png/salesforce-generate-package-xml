@@ -1,8 +1,12 @@
 # Changelog
 
 このプロジェクトのすべての変更履歴を記載します。
-フォーマットは [Keep a Changelog](https://keepachangelog.com/ja/1.1.0/) に準拠し、
+`main` への push 時に [python-semantic-release](https://python-semantic-release.readthedocs.io/) が
+[Conventional Commits](https://www.conventionalcommits.org/) からリリース以降のエントリを自動生成します。
+それより前のエントリは [Keep a Changelog](https://keepachangelog.com/ja/1.1.0/) 形式で手動記載されたものです。
 バージョン管理は [Semantic Versioning](https://semver.org/lang/ja/) に従います。
+
+<!-- version list -->
 
 ## [Unreleased]
 
