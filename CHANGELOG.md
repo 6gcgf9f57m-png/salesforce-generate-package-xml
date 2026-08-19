@@ -8,6 +8,36 @@
 
 <!-- version list -->
 
+## v1.0.6 (2026-08-19)
+
+### Bug Fixes
+
+- Correct python-semantic-release config keys
+  ([`e19a8a8`](https://github.com/jsugawara-keizu/salesforce-generate-package-xml/commit/e19a8a87d86edb7cecb8180dc462f864a6ec1ad6))
+
+- Get_metadata_typesを複数回呼び和集合を取り、タイプ一覧欠落を防止
+  ([`17db8e5`](https://github.com/jsugawara-keizu/salesforce-generate-package-xml/commit/17db8e5bd9be9225a0cc0685a279f7fb4ca02b56))
+
+- Run_sfのresult欠損レスポンスを警告付き成功ではなく失敗として扱う
+  ([`fc48ddd`](https://github.com/jsugawara-keizu/salesforce-generate-package-xml/commit/fc48dddedd9c12b36a620deacaafb0b8981b069e))
+
+- StdValueSetRegistry.json 取得の429エラーに対処
+  ([`e429525`](https://github.com/jsugawara-keizu/salesforce-generate-package-xml/commit/e429525531c5df2d453688721387bcc10dfec0cd))
+
+### Build System
+
+- **deps-dev**: Update ruff requirement from >=0.4 to >=0.15.10
+  ([`07faf55`](https://github.com/jsugawara-keizu/salesforce-generate-package-xml/commit/07faf55db1bddce6c87d5d76fc96283599fe6a24))
+
+- **deps-dev**: Update setuptools requirement from >=68 to >=82.0.1
+  ([`5900b42`](https://github.com/jsugawara-keizu/salesforce-generate-package-xml/commit/5900b42265b1ee7ffbbc4851869694e7ed07b5be))
+
+### Chores
+
+- Switch to python-semantic-release for automated versioning
+  ([`c132ecd`](https://github.com/jsugawara-keizu/salesforce-generate-package-xml/commit/c132ecdf3b2cee22afe67160b1230b92d0d45447))
+
+
 ## [Unreleased]
 
 ### 修正
