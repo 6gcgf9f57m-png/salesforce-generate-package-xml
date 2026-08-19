@@ -66,15 +66,17 @@ version_toml = ["pyproject.toml:project.version"]
 version_variables = ["src/sf_package_xml/__init__.py:__version__"]
 build_command = ""
 tag_format = "v{version}"
-commit_parser = "conventionalcommits"
+commit_parser = "conventional"
 
 [tool.semantic_release.branches.main]
 match = "main"
 
 [tool.semantic_release.changelog]
-changelog_file = "CHANGELOG.md"
 mode = "update"
 insertion_flag = "<!-- version list -->"
+
+[tool.semantic_release.changelog.default_templates]
+changelog_file = "CHANGELOG.md"
 
 [tool.semantic_release.publish]
 upload_to_vcs_release = true
