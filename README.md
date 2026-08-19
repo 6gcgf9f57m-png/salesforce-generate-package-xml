@@ -2,6 +2,8 @@
 
 [![CI](https://github.com/jsugawara-keizu/salesforce-generate-package-xml/actions/workflows/ci.yml/badge.svg)](https://github.com/jsugawara-keizu/salesforce-generate-package-xml/actions/workflows/ci.yml)
 
+Python CLI that auto-generates a complete Salesforce `package.xml` manifest covering every metadata type in an org, using the Metadata API and Salesforce CLI (`sf`).
+
 > [!NOTE]
 > このリポジトリは Python パッケージ開発・GitHub Actions CI・ブランチ運用などを学ぶための**練習・検証目的**で作成したものです。
 > 本番環境での利用は想定していません。
